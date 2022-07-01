@@ -76,28 +76,33 @@ class ResponseTimes(object):
                             self._records[address] = {}
                         self._records[address][log_datetime] = response_time
 
-    def find_failure(self) -> list[dict[str, str]]:
+    def find_failure(self, threshold: int = 1) -> list[dict[str, str]]:
         """
         故障状態のサーバーアドレスと、そのサーバーの故障期間を辞書に返却する。
         """
         result = []
+        if threshold <= 0:
+            threshold = 1
         for address, records in self._records.items():
-            is_failed = False  # レスポンスがない記録がはじまったフラグ
+            failed_count = 0  # レスポンスがない記録の回数
             fail_start_time = 0
             for log_datetime, response_time in sorted(records.items()):
-                if not is_failed and response_time == '-':
-                    fail_start_time = log_datetime
-                    is_failed = True
-                elif is_failed and response_time != '-':
+                if response_time == '-':
+                    if failed_count <= 0:
+                        fail_start_time = log_datetime
+                    failed_count += 1
+                elif failed_count >= 1:
                     fail_end_time = log_datetime
-                    is_failed = False
-                    period = "{0:}-{1:}".format(fail_start_time, fail_end_time)
-                    result.append({
-                        "address": address,
-                        "period": period})
+                    if failed_count >= threshold:
+                        period = \
+                            "{0:}-{1:}".format(fail_start_time, fail_end_time)
+                        result.append({
+                            "address": address,
+                            "period": period})
+                    failed_count = 0
             else:
                 # 応答が復帰したデータがみつからず最後に至ったら、最後の無応答時間までを故障期間にする。
-                if is_failed:
+                if failed_count >= threshold:
                     period = "{0:}-{1:}".format(fail_start_time, log_datetime)
                     result.append({
                         "address": address,

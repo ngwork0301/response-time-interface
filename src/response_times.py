@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 import functools
 
 
@@ -86,7 +87,8 @@ class ResponseTimes(object):
         for address, records in self._records.items():
             failed_count = 0  # レスポンスがない記録の回数
             fail_start_time = 0
-            for log_datetime, response_time in sorted(records.items()):
+            for log_datetime, response_time in sorted(
+                                  records.items(), key=lambda x: x[0]):
                 if response_time == '-':
                     if failed_count <= 0:
                         fail_start_time = log_datetime
@@ -108,4 +110,50 @@ class ResponseTimes(object):
                         "address": address,
                         "period": period})
 
+        return result
+
+    def find_high_load(self, threshold_count: int, threshold_average: float) -> list[dict[str, str]]:
+        """
+        直近threshold_count回の平均応答時間がthreshold_averageを超えていたら、
+        そのサーバが過負荷になっているとみなし、その期間を取得する。
+        """
+        def average(response_times: list[str]) -> Optional[float]:
+            only_num_list = list(filter(is_natural_number, response_times))
+            if len(only_num_list) <= 0:
+                return None
+            total = functools.reduce(
+                lambda x, y: str(int(x) + int(y)), only_num_list)
+            return int(total) / len(only_num_list)
+
+        result = []
+        for address, records in self._records.items():
+            sorted_records = sorted(records.items(), key=lambda x: x[0])
+            # 直近threshold_count回分のデータ
+            cached_responses = []
+
+            load_start_time = 0
+            for log_datetime, response_time in sorted_records:
+                cached_responses.append(response_time)
+                if len(cached_responses) > threshold_count:
+                    cached_responses.pop(0)
+                    recent_average = average(cached_responses)
+                    if recent_average is not None \
+                    and recent_average >= threshold_average:
+                        if load_start_time <= 0:
+                            load_start_time = log_datetime
+                    elif load_start_time != 0:
+                        load_end_time = log_datetime
+                        period = \
+                            "{0:}-{1:}".format(load_start_time, load_end_time)
+                        result.append({
+                            "address": address,
+                            "period": period})
+                        load_start_time = 0
+            else:
+                # 応答が復帰したデータがみつからず最後に至ったら、最後の無応答時間までを故障期間にする。
+                if load_start_time != 0:
+                    period = "{0:}-{1:}".format(load_start_time, log_datetime)
+                    result.append({
+                        "address": address,
+                        "period": period})
         return result

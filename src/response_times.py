@@ -2,6 +2,7 @@
 # -*- coding:utf-8-*-
 import datetime
 import functools
+import ipaddress
 from typing import Optional
 import os
 
@@ -45,8 +46,8 @@ class ResponseTimes(object):
     ]
 
     def __init__(self, csv_file_path: str):
-        self._records: dict[str, dict[datetime.datetime, str]] = {}
-        self._subnets: dict[str, list[str]] = {}
+        self._records: dict[ipaddress.IPv4Interface, dict[datetime.datetime, str]] = {}
+        self._subnets: dict[ipaddress.IPv4Network, list[str]] = {}
         self.read_csv(csv_file_path)
 
     def read_csv(self, file_path: str) -> None:
@@ -88,7 +89,7 @@ class ResponseTimes(object):
                         elements = line.split(',')
                         log_datetime = conv_to_datetime(elements[0].strip())
                         response_time = elements[2].strip()
-                        address = elements[1].strip()
+                        address = ipaddress.IPv4Interface(elements[1].strip())
                         if address not in self._records:
                             self._records[address] = {}
                         self._records[address][log_datetime] = response_time
@@ -99,32 +100,8 @@ class ResponseTimes(object):
         """
         サーバアドレスからサブネットを特定して、サブネット内のサーバアドレスの一覧を作成する。
         """
-        def conv_ip_to_int(s_ip: str) -> int:
-            splited = s_ip.split('.')
-            result = int(splited[0])
-            for idx in range(1, 4):
-                result = result << 8
-                result += int(splited[idx])
-            return result
-
-        def conv_int_to_ip(i_ip: int, i_mask_bits: int) -> str:
-            result = "{0:}/{1:}".format(i_ip & 0xff, i_mask_bits)
-            for idx in range(1, 4):
-                result = "{0:}.".format((i_ip >> (8 * idx)) & 0xFF) + result
-            return result
-        
-        def conv_bits_to_mask(i_bits) -> int:
-            return ~sum([1 << idx for idx in range(i_bits)])
-
-        def get_subnet(address: str) -> str:
-            splited = address.split('/')
-            if len(splited) == 2:
-                i_ip = conv_ip_to_int(splited[0])
-                i_mask_bits = int(splited[1])
-                i_mask = conv_bits_to_mask(i_mask_bits)
-                return conv_int_to_ip(i_ip & i_mask, i_mask_bits)
-            elif len(splited) == 1:
-                return address
+        def get_subnet(address: str) -> ipaddress.IPv4Network:
+            return ipaddress.IPv4Interface(address).network
 
         for address in self._records.keys():
             subnet = get_subnet(address)
@@ -132,7 +109,7 @@ class ResponseTimes(object):
                 self._subnets[subnet] = []
             self._subnets[subnet].append(address)
 
-    def _find_address_failure(self, address: str, threshold: int) -> list[dict[str, str]]:
+    def _find_address_failure(self, address: ipaddress.IPv4Interface, threshold: int) -> list[dict[str, str]]:
         """
         指定したサーバアドレスの故障期間を返却する。
         """
@@ -152,7 +129,7 @@ class ResponseTimes(object):
                     period = \
                         "{0:}-{1:}".format(fail_start_time, fail_end_time)
                     result.append({
-                        "address": address,
+                        "address": address.with_prefixlen,
                         "period": period})
                 failed_count = 0
         else:
@@ -160,7 +137,7 @@ class ResponseTimes(object):
             if failed_count >= threshold:
                 period = "{0:}-{1:}".format(fail_start_time, log_datetime)
                 result.append({
-                    "address": address,
+                    "address": address.with_prefixlen,
                     "period": period})
         return result
 
@@ -209,7 +186,7 @@ class ResponseTimes(object):
                         period = \
                             "{0:}-{1:}".format(load_start_time, load_end_time)
                         result.append({
-                            "address": address,
+                            "address": address.with_prefixlen,
                             "period": period})
                         load_start_time = None
             else:
@@ -217,11 +194,11 @@ class ResponseTimes(object):
                 if load_start_time is not None:
                     period = "{0:}-{1:}".format(load_start_time, log_datetime)
                     result.append({
-                        "address": address,
+                        "address": address.with_prefixlen,
                         "period": period})
         return result
 
-    def _find_subnet_failure(self, subnet: str, threshold: int = 1) -> list[dict[str, str]]:
+    def _find_subnet_failure(self, subnet: ipaddress.IPv4Network, threshold: int = 1) -> list[dict[str, str]]:
         """
         指定したサブネットの故障期間を返却する。
         """
@@ -236,7 +213,7 @@ class ResponseTimes(object):
         #     return []
         # 最初のホストの故障期間データをもとに他のホストの故障を調べる
         first_address_failures = self._find_address_failure(self._subnets[subnet][0], threshold)
-        result = [{"subnet": subnet, "period": failure["period"]} for failure in first_address_failures]
+        result = [{"subnet": subnet.with_prefixlen, "period": failure["period"]} for failure in first_address_failures]
         for address in self._subnets[subnet]:
             address_failure = self._find_address_failure(address, threshold)
             result = list(filter(lambda r: includes(address_failure, r["period"]), result))

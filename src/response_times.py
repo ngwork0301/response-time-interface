@@ -36,10 +36,14 @@ class ResponseTimes(object):
     """
     時系列の応答時間データクラス
     """
-    __slots__ = ['_records']
+    __slots__ = [
+        '_records',
+        '_subnets'
+    ]
 
     def __init__(self, csv_file_path: str):
         self._records: dict[str, dict[int, str]] = {}
+        self._subnets: dict[str, list[str]] = {}
         self.read_csv(csv_file_path)
 
     def read_csv(self, file_path: str) -> None:
@@ -77,9 +81,77 @@ class ResponseTimes(object):
                             self._records[address] = {}
                         self._records[address][log_datetime] = response_time
 
+        self._parse_subnet()
+
+    def _parse_subnet(self):
+        """
+        アドレスからサブネットを特定して、サブネット内のアドレスの一覧を作成する。
+        """
+        def conv_ip_to_int(s_ip: str) -> int:
+            splited = s_ip.split('.')
+            result = int(splited[0])
+            for idx in range(1, 4):
+                result = result << 8
+                result += int(splited[idx])
+            return result
+
+        def conv_int_to_ip(i_ip: int, i_mask_bits: int) -> str:
+            result = "{0:}/{1:}".format(i_ip & 0xff, i_mask_bits)
+            for idx in range(1, 4):
+                result = "{0:}.".format((i_ip >> (8 * idx)) & 0xFF) + result
+            return result
+        
+        def conv_bits_to_mask(i_bits) -> int:
+            return ~sum([1 << idx for idx in range(i_bits)])
+
+        def get_subnet(address: str) -> str:
+            splited = address.split('/')
+            if len(splited) == 2:
+                i_ip = conv_ip_to_int(splited[0])
+                i_mask_bits = int(splited[1])
+                i_mask = conv_bits_to_mask(i_mask_bits)
+                return conv_int_to_ip(i_ip & i_mask, i_mask_bits)
+            elif len(splited) == 1:
+                return address
+
+        for address in self._records.keys():
+            subnet = get_subnet(address)
+            if subnet not in self._subnets:
+                self._subnets[subnet] = []
+            self._subnets[subnet].append(address)
+
+    def _find_address_failure(self, address: str, threshold: int) -> list[dict[str, str]]:
+        result = []
+        records = self._records[address]
+        failed_count = 0  # レスポンスがない記録の回数
+        fail_start_time = 0
+        for log_datetime, response_time in sorted(
+                                records.items(), key=lambda x: x[0]):
+            if response_time == '-':
+                if failed_count <= 0:
+                    fail_start_time = log_datetime
+                failed_count += 1
+            elif failed_count >= 1:
+                fail_end_time = log_datetime
+                if failed_count >= threshold:
+                    period = \
+                        "{0:}-{1:}".format(fail_start_time, fail_end_time)
+                    result.append({
+                        "address": address,
+                        "period": period})
+                failed_count = 0
+        else:
+            # 応答が復帰したデータがみつからず最後に至ったら、最後の無応答時間までを故障期間にする。
+            if failed_count >= threshold:
+                period = "{0:}-{1:}".format(fail_start_time, log_datetime)
+                result.append({
+                    "address": address,
+                    "period": period})
+        return result
+
     def find_failure(self, threshold: int = 1) -> list[dict[str, str]]:
         """
-        故障状態のサーバーアドレスと、そのサーバーの故障期間を辞書に返却する。
+        故障状態のサーバーアドレスと、そのサーバーの故障期間を返却する。
         """
         result = []
         if threshold <= 0:
@@ -156,4 +228,34 @@ class ResponseTimes(object):
                     result.append({
                         "address": address,
                         "period": period})
+        return result
+
+    def _find_subnet_failure(self, subnet: str, threshold: int = 1) -> list[dict[str, str]]:
+        """
+        指定したサブネットの故障期間を返却する。
+        """
+        def includes(address_failure: list, period: str) -> bool:
+            for failure in address_failure:
+                if period == failure['period']:
+                    return True
+            return False
+
+        # サブネットに属する2つの以上のホストがリストにない場合は、サブネットの故障とはしない
+        # if len(self._subnets[subnet]) < 2:
+        #     return []
+        # 最初のホストの故障期間データをもとに他のホストの故障を調べる
+        first_address_failures = self._find_address_failure(self._subnets[subnet][0], threshold)
+        result = [{"subnet": subnet, "period": failure["period"]} for failure in first_address_failures]
+        for address in self._subnets[subnet]:
+            address_failure = self._find_address_failure(address, threshold)
+            result = list(filter(lambda r: includes(address_failure, r["period"]), result))
+        return result
+
+    def find_all_subnet_failure(self, threshold: int = 1) -> list[dict[str, str]]:
+        """
+        故障状態のサブネットと、その故障期間を返却する。
+        """
+        result = []
+        for subnet in self._subnets.keys():
+            result += self._find_subnet_failure(subnet, threshold)
         return result

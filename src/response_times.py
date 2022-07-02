@@ -47,7 +47,7 @@ class ResponseTimes(object):
 
     def __init__(self, csv_file_path: str):
         self._records: dict[ipaddress.IPv4Interface, dict[datetime.datetime, str]] = {}
-        self._subnets: dict[ipaddress.IPv4Network, list[str]] = {}
+        self._subnets: dict[ipaddress.IPv4Network, list[ipaddress.IPv4Interface]] = {}
         self.read_csv(csv_file_path)
 
     def read_csv(self, file_path: str) -> None:
@@ -116,7 +116,7 @@ class ResponseTimes(object):
         result = []
         records = self._records[address]
         failed_count = 0  # レスポンスがない記録の回数
-        fail_start_time = 0
+        fail_start_time = None
         for log_datetime, response_time in sorted(
                                 records.items(), key=lambda x: x[0]):
             if response_time == '-':
@@ -131,6 +131,7 @@ class ResponseTimes(object):
                     result.append({
                         "address": address.with_prefixlen,
                         "period": period})
+                fail_start_time = None
                 failed_count = 0
         else:
             # 応答が復帰したデータがみつからず最後に至ったら、最後の無応答時間までを故障期間にする。

@@ -109,7 +109,7 @@ class ResponseTimes(object):
                 self._subnets[subnet] = []
             self._subnets[subnet].append(address)
 
-    def _find_address_failure(self, address: ipaddress.IPv4Interface, threshold: int) -> list[dict[str, str]]:
+    def _find_address_failure(self, address: ipaddress.IPv4Interface, threshold: int) -> list[dict]:
         """
         指定したサーバアドレスの故障期間を返却する。
         """
@@ -117,29 +117,34 @@ class ResponseTimes(object):
         records = self._records[address]
         failed_count = 0  # レスポンスがない記録の回数
         fail_start_time = None
+        last_failed_time = None
         for log_datetime, response_time in sorted(
                                 records.items(), key=lambda x: x[0]):
             if response_time == '-':
                 if failed_count <= 0:
                     fail_start_time = log_datetime
                 failed_count += 1
+                last_failed_time = log_datetime
             elif failed_count >= 1:
-                fail_end_time = log_datetime
                 if failed_count >= threshold:
-                    period = \
-                        "{0:}-{1:}".format(fail_start_time, fail_end_time)
                     result.append({
-                        "address": address.with_prefixlen,
-                        "period": period})
+                        "address": address,
+                        "occurrance_time": fail_start_time,
+                        "last_failed_time": last_failed_time,
+                        "return_time": log_datetime
+                        })
                 fail_start_time = None
+                last_failed_time = None
                 failed_count = 0
         else:
             # 応答が復帰したデータがみつからず最後に至ったら、最後の無応答時間までを故障期間にする。
             if failed_count >= threshold:
-                period = "{0:}-{1:}".format(fail_start_time, log_datetime)
                 result.append({
-                    "address": address.with_prefixlen,
-                    "period": period})
+                    "address": address,
+                    "occurrance_time": fail_start_time,
+                    "last_failed_time": last_failed_time,
+                    "return_time": None
+                    })
         return result
 
     def find_all_failure(self, threshold: int = 1) -> list[dict[str, str]]:
@@ -150,10 +155,14 @@ class ResponseTimes(object):
         if threshold <= 0:
             threshold = 1
         for address in self._records.keys():
-            result += self._find_address_failure(address, threshold)
+            failures = self._find_address_failure(address, threshold)
+            for failure in failures:
+                end_time = failure['return_time'] if failure['return_time'] is not None else failure['last_failed_time']
+                period = "{0:} ~ {1:}".format(failure['occurrance_time'], end_time)
+                result.append({"address": failure['address'].with_prefixlen, "period": period})
         return result
 
-    def _find_address_high_load(self, address: ipaddress.IPv4Interface, threshold_count: int, threshold_average: float)  -> list[dict[str, str]]:
+    def _find_address_high_load(self, address: ipaddress.IPv4Interface, threshold_count: int, threshold_average: float)  -> list[dict]:
         """
         指定したサーバアドレスの過負荷期間を返却する。
         """
@@ -172,6 +181,7 @@ class ResponseTimes(object):
         cached_responses = []
 
         load_start_time = None
+        last_load_time = None
         for log_datetime, response_time in sorted_records:
             cached_responses.append(response_time)
             if len(cached_responses) > threshold_count:
@@ -181,21 +191,25 @@ class ResponseTimes(object):
                    and recent_average >= threshold_average:
                     if load_start_time is None:
                         load_start_time = log_datetime
+                    last_load_time = log_datetime
                 elif load_start_time is not None:
-                    load_end_time = log_datetime
-                    period = \
-                        "{0:}-{1:}".format(load_start_time, load_end_time)
                     result.append({
-                        "address": address.with_prefixlen,
-                        "period": period})
+                        "address": address,
+                        "occurrance_time": load_start_time,
+                        "last_load_time": last_load_time,
+                        "return_time": log_datetime
+                        })
                     load_start_time = None
+                    last_load_time = None
         else:
             # 応答が復帰したデータがみつからず最後に至ったら、最後の無応答時間までを故障期間にする。
             if load_start_time is not None:
-                period = "{0:}-{1:}".format(load_start_time, log_datetime)
                 result.append({
-                    "address": address.with_prefixlen,
-                    "period": period})
+                    "address": address,
+                    "occurrance_time": load_start_time,
+                    "last_load_time": last_load_time,
+                    "return_time": None
+                    })
         return result
 
     def find_all_high_load(self, threshold_count: int, threshold_average: float) -> list[dict[str, str]]:
@@ -205,7 +219,13 @@ class ResponseTimes(object):
         """
         result = []
         for address in self._records.keys():
-            result += self._find_address_high_load(address, threshold_count, threshold_average)
+            high_loads = self._find_address_high_load(address, threshold_count, threshold_average)
+            for high_load in high_loads:
+                end_time = high_load['return_time'] if high_load['return_time'] is not None else high_load['last_load_time']
+                period = "{0:} ~ {1:}".format(high_load['occurrance_time'], end_time)
+                result.append(
+                    {"address": high_load['address'].with_prefixlen,
+                     "period": period})
         return result
 
     def _find_subnet_failure(self, subnet: ipaddress.IPv4Network, threshold: int = 1) -> list[dict[str, str]]:
@@ -214,7 +234,9 @@ class ResponseTimes(object):
         """
         def includes(address_failure: list, period: str) -> bool:
             for failure in address_failure:
-                if period == failure['period']:
+                end_time = failure['return_time'] if failure['return_time'] is not None else failure['last_failed_time']
+                failure_period = "{0:} ~ {1:}".format(failure['occurrance_time'], end_time)
+                if period == failure_period:
                     return True
             return False
 
@@ -223,7 +245,11 @@ class ResponseTimes(object):
         #     return []
         # 最初のホストの故障期間データをもとに他のホストの故障を調べる
         first_address_failures = self._find_address_failure(self._subnets[subnet][0], threshold)
-        result = [{"subnet": subnet.with_prefixlen, "period": failure["period"]} for failure in first_address_failures]
+        result = [
+            {"subnet": subnet.with_prefixlen,
+             "period": "{0:} ~ {1:}".format(failure['occurrance_time'],
+            failure['return_time'] if failure['return_time'] is not None else failure['last_failed_time'])}
+            for failure in first_address_failures]
         for address in self._subnets[subnet]:
             address_failure = self._find_address_failure(address, threshold)
             result = list(filter(lambda r: includes(address_failure, r["period"]), result))

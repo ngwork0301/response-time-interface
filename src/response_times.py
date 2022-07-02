@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# -*- coding:utf-8-*-
 import os
 from typing import Optional
 import functools

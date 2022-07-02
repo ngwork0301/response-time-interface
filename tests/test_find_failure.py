@@ -25,7 +25,7 @@ def test_find_failure():
         "test_1address_1fail.csv")
     expect = [{"address": "10.20.30.1/16",
                "period": "2020-10-19 13:33:24-2020-10-19 13:33:26"}]
-    actual = ResponseTimes(test_csv_path).find_failure()
+    actual = ResponseTimes(test_csv_path).find_all_failure()
     
     assert actual == expect
 
@@ -44,18 +44,18 @@ def test_find_failure_threshold():
         {"address": "10.20.30.1/16", "period": "2020-10-19 13:33:29-2020-10-19 13:33:32"},
         {"address": "10.20.30.1/16", "period": "2020-10-19 13:33:33-2020-10-19 13:33:37"}
         ]
-    actual = response_times.find_failure(threshold = 1)
+    actual = response_times.find_all_failure(threshold = 1)
     assert threshold1_expect == actual
 
     threshold3_expect = [
         {"address": "10.20.30.1/16", "period": "2020-10-19 13:33:29-2020-10-19 13:33:32"},
         {"address": "10.20.30.1/16", "period": "2020-10-19 13:33:33-2020-10-19 13:33:37"}
         ]
-    actual = response_times.find_failure(threshold = 3)
+    actual = response_times.find_all_failure(threshold = 3)
     assert threshold3_expect == actual
 
     threshold5_expect = []
-    actual = response_times.find_failure(threshold = 5)
+    actual = response_times.find_all_failure(threshold = 5)
     assert threshold5_expect == actual
 
 

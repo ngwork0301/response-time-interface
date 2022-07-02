@@ -29,7 +29,7 @@ def is_natural_number(s_arg: str) -> bool:
 
 def is_address(s_arg: str) -> bool:
     """
-    与えられた引数の文字列がアドレスになっているかを確認する。
+    与えられた引数の文字列がサーバアドレスになっているかを確認する。
     """
     # TODO: 現象はすべてpass
     return True
@@ -97,7 +97,7 @@ class ResponseTimes(object):
 
     def _parse_subnet(self):
         """
-        アドレスからサブネットを特定して、サブネット内のアドレスの一覧を作成する。
+        サーバアドレスからサブネットを特定して、サブネット内のサーバアドレスの一覧を作成する。
         """
         def conv_ip_to_int(s_ip: str) -> int:
             splited = s_ip.split('.')
@@ -133,6 +133,9 @@ class ResponseTimes(object):
             self._subnets[subnet].append(address)
 
     def _find_address_failure(self, address: str, threshold: int) -> list[dict[str, str]]:
+        """
+        指定したサーバアドレスの故障期間を返却する。
+        """
         result = []
         records = self._records[address]
         failed_count = 0  # レスポンスがない記録の回数
@@ -161,39 +164,15 @@ class ResponseTimes(object):
                     "period": period})
         return result
 
-    def find_failure(self, threshold: int = 1) -> list[dict[str, str]]:
+    def find_all_failure(self, threshold: int = 1) -> list[dict[str, str]]:
         """
         故障状態のサーバーアドレスと、そのサーバーの故障期間を返却する。
         """
         result = []
         if threshold <= 0:
             threshold = 1
-        for address, records in self._records.items():
-            failed_count = 0  # レスポンスがない記録の回数
-            fail_start_time = 0
-            for log_datetime, response_time in sorted(
-                                  records.items(), key=lambda x: x[0]):
-                if response_time == '-':
-                    if failed_count <= 0:
-                        fail_start_time = log_datetime
-                    failed_count += 1
-                elif failed_count >= 1:
-                    fail_end_time = log_datetime
-                    if failed_count >= threshold:
-                        period = \
-                            "{0:}-{1:}".format(fail_start_time, fail_end_time)
-                        result.append({
-                            "address": address,
-                            "period": period})
-                    failed_count = 0
-            else:
-                # 応答が復帰したデータがみつからず最後に至ったら、最後の無応答時間までを故障期間にする。
-                if failed_count >= threshold:
-                    period = "{0:}-{1:}".format(fail_start_time, log_datetime)
-                    result.append({
-                        "address": address,
-                        "period": period})
-
+        for address in self._records.keys():
+            result += self._find_address_failure(address, threshold)
         return result
 
     def find_high_load(self, threshold_count: int, threshold_average: float) -> list[dict[str, str]]:

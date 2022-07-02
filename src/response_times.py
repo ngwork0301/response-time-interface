@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 # -*- coding:utf-8-*-
-import os
-from typing import Optional
+import datetime
 import functools
+from typing import Optional
+import os
 
 
 def is_datetime(s_arg: str) -> bool:
@@ -44,7 +45,7 @@ class ResponseTimes(object):
     ]
 
     def __init__(self, csv_file_path: str):
-        self._records: dict[str, dict[int, str]] = {}
+        self._records: dict[str, dict[datetime.datetime, str]] = {}
         self._subnets: dict[str, list[str]] = {}
         self.read_csv(csv_file_path)
 
@@ -67,6 +68,15 @@ class ResponseTimes(object):
             else:
                 return False
             return True
+        
+        def conv_to_datetime(arg: str) -> datetime.datetime:
+            year = int(arg[0:4])
+            month = int(arg[4:6])
+            day = int(arg[6:8])
+            hour = int(arg[8:10])
+            minute = int(arg[10:12])
+            second = int(arg[12:14])
+            return datetime.datetime(year, month, day, hour, minute, second)
 
         if is_valid_csv(file_path):
             with open(file_path, "r", encoding="utf-8") as fd:
@@ -76,7 +86,7 @@ class ResponseTimes(object):
                         break
                     if is_valid_line(line):
                         elements = line.split(',')
-                        log_datetime = int(elements[0].strip())
+                        log_datetime = conv_to_datetime(elements[0].strip())
                         response_time = elements[2].strip()
                         address = elements[1].strip()
                         if address not in self._records:
@@ -205,27 +215,27 @@ class ResponseTimes(object):
             # 直近threshold_count回分のデータ
             cached_responses = []
 
-            load_start_time = 0
+            load_start_time = None
             for log_datetime, response_time in sorted_records:
                 cached_responses.append(response_time)
                 if len(cached_responses) > threshold_count:
                     cached_responses.pop(0)
                     recent_average = average(cached_responses)
                     if recent_average is not None \
-                    and recent_average >= threshold_average:
-                        if load_start_time <= 0:
+                       and recent_average >= threshold_average:
+                        if load_start_time is None:
                             load_start_time = log_datetime
-                    elif load_start_time != 0:
+                    elif load_start_time is not None:
                         load_end_time = log_datetime
                         period = \
                             "{0:}-{1:}".format(load_start_time, load_end_time)
                         result.append({
                             "address": address,
                             "period": period})
-                        load_start_time = 0
+                        load_start_time = None
             else:
                 # 応答が復帰したデータがみつからず最後に至ったら、最後の無応答時間までを故障期間にする。
-                if load_start_time != 0:
+                if load_start_time is not None:
                     period = "{0:}-{1:}".format(load_start_time, log_datetime)
                     result.append({
                         "address": address,

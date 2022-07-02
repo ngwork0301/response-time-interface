@@ -153,10 +153,9 @@ class ResponseTimes(object):
             result += self._find_address_failure(address, threshold)
         return result
 
-    def find_high_load(self, threshold_count: int, threshold_average: float) -> list[dict[str, str]]:
+    def _find_address_high_load(self, address: ipaddress.IPv4Interface, threshold_count: int, threshold_average: float)  -> list[dict[str, str]]:
         """
-        直近threshold_count回の平均応答時間がthreshold_averageを超えていたら、
-        そのサーバが過負荷になっているとみなし、その期間を取得する。
+        指定したサーバアドレスの過負荷期間を返却する。
         """
         def average(response_times: list[str]) -> Optional[float]:
             only_num_list = list(filter(is_natural_number, response_times))
@@ -165,38 +164,48 @@ class ResponseTimes(object):
             total = functools.reduce(
                 lambda x, y: str(int(x) + int(y)), only_num_list)
             return int(total) / len(only_num_list)
-
+        
         result = []
-        for address, records in self._records.items():
-            sorted_records = sorted(records.items(), key=lambda x: x[0])
-            # 直近threshold_count回分のデータ
-            cached_responses = []
+        records = self._records[address]
+        sorted_records = sorted(records.items(), key=lambda x: x[0])
+        # 直近threshold_count回分のデータ
+        cached_responses = []
 
-            load_start_time = None
-            for log_datetime, response_time in sorted_records:
-                cached_responses.append(response_time)
-                if len(cached_responses) > threshold_count:
-                    cached_responses.pop(0)
-                    recent_average = average(cached_responses)
-                    if recent_average is not None \
-                       and recent_average >= threshold_average:
-                        if load_start_time is None:
-                            load_start_time = log_datetime
-                    elif load_start_time is not None:
-                        load_end_time = log_datetime
-                        period = \
-                            "{0:}-{1:}".format(load_start_time, load_end_time)
-                        result.append({
-                            "address": address.with_prefixlen,
-                            "period": period})
-                        load_start_time = None
-            else:
-                # 応答が復帰したデータがみつからず最後に至ったら、最後の無応答時間までを故障期間にする。
-                if load_start_time is not None:
-                    period = "{0:}-{1:}".format(load_start_time, log_datetime)
+        load_start_time = None
+        for log_datetime, response_time in sorted_records:
+            cached_responses.append(response_time)
+            if len(cached_responses) > threshold_count:
+                cached_responses.pop(0)
+                recent_average = average(cached_responses)
+                if recent_average is not None \
+                   and recent_average >= threshold_average:
+                    if load_start_time is None:
+                        load_start_time = log_datetime
+                elif load_start_time is not None:
+                    load_end_time = log_datetime
+                    period = \
+                        "{0:}-{1:}".format(load_start_time, load_end_time)
                     result.append({
                         "address": address.with_prefixlen,
                         "period": period})
+                    load_start_time = None
+        else:
+            # 応答が復帰したデータがみつからず最後に至ったら、最後の無応答時間までを故障期間にする。
+            if load_start_time is not None:
+                period = "{0:}-{1:}".format(load_start_time, log_datetime)
+                result.append({
+                    "address": address.with_prefixlen,
+                    "period": period})
+        return result
+
+    def find_all_high_load(self, threshold_count: int, threshold_average: float) -> list[dict[str, str]]:
+        """
+        直近threshold_count回の平均応答時間がthreshold_averageを超えていたら、
+        そのサーバが過負荷になっているとみなし、その期間を取得する。
+        """
+        result = []
+        for address in self._records.keys():
+            result += self._find_address_high_load(address, threshold_count, threshold_average)
         return result
 
     def _find_subnet_failure(self, subnet: ipaddress.IPv4Network, threshold: int = 1) -> list[dict[str, str]]:

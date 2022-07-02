@@ -15,7 +15,7 @@ def response_times_instance():
     return ResponseTimes(test_csv_path)
 
 
-def test_find_failure():
+def test_find_all_failure():
     """
     find_failureメソッドの正常系のテスト
     """
@@ -30,7 +30,7 @@ def test_find_failure():
     assert actual == expect
 
 
-def test_find_failure_threshold():
+def test_find_all_failure_threshold():
     """
     find_failureメソッドにthresholdを指定したときの正常系のテスト
     """
@@ -59,7 +59,7 @@ def test_find_failure_threshold():
     assert threshold5_expect == actual
 
 
-def test_find_high_load():
+def test_find_all_high_load():
     """
     find_high_loadメソッドの正常系のテスト
     """
@@ -73,7 +73,7 @@ def test_find_high_load():
         {"address": "10.20.30.1/16", "period": "2020-10-19 13:33:42-2020-10-19 13:33:47"},
         {"address": "10.20.30.1/16", "period": "2020-10-19 13:33:50-2020-10-19 13:33:55"},
         ]
-    actual = response_times.find_high_load(3, 3)
+    actual = response_times.find_all_high_load(3, 3)
     assert expect == actual
 
 

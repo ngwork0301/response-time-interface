@@ -340,8 +340,8 @@ class ResponseTimes(object):
         if tolerance is None:
             tolerance = ResponseTimes.DEFAULT_SUBNET_FAILURE_TOLERANCE
         # サブネットに属する2つの以上のホストがリストにない場合は、サブネットの故障とはしない
-        # if len(self._subnets[subnet]) < 2:
-        #     return []
+        if len(self._subnets[subnet]) < 2:
+            return []
         # 最初のホストの故障期間データをもとに他のホストの故障を調べる
         first_address_failures = self._find_failure(
                                      self._subnets[subnet][0], threshold_count)

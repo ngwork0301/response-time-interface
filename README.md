@@ -93,5 +93,7 @@ Type "help", "copyright", "credits" or "license" for more information.
 20201019133325,10.20.30.2/16,2
 ```
 
+## 開発環境
+* 開発環境作成のメモは [[Wiki|wiki]] を参照
 
 

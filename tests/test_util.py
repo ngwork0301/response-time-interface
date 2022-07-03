@@ -97,3 +97,4 @@ def test_is_response_time_result():
     assert is_response_time_result("1") is True
     assert is_response_time_result("0") is True
     assert is_response_time_result("-1") is False
+    assert is_response_time_result("a") is False

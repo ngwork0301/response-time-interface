@@ -134,7 +134,7 @@ class ResponseTimes(object):
         if is_valid_csv(file_path):
             logger.info("Started importing csv: {0:}".format(file_path))
             with open(file_path, "r", encoding="utf-8") as fd:
-                line_num = 0
+                line_num = 1
                 while True:
                     line = fd.readline()
                     if not line:
@@ -322,10 +322,10 @@ class ResponseTimes(object):
                 return False
             l_end_time = left_failure['return_time'] \
                 if left_failure['return_time'] is not None \
-                else left_failure['last_load_time']
+                else left_failure['last_failed_time']
             r_end_time = right_failure['return_time'] \
                 if right_failure['return_time'] is not None \
-                else right_failure['last_load_time']
+                else right_failure['last_failed_time']
             if not is_in_tolerance(l_end_time, r_end_time, tolerance):
                 return False
             return True

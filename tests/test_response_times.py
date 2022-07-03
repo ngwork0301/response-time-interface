@@ -29,6 +29,31 @@ def test_import_csv(caplog):
     assert ("response_times", logging.INFO, expected_log_start) in caplog.record_tuples
     assert ("response_times", logging.INFO, "Completed.") in caplog.record_tuples
 
+    # 不正な行があったときにちゃんとスキップできるか
+    test_csv_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "test_includes_invalid_line.csv")
+    expected_log_start = "Started importing csv: {0:}".format(test_csv_path)
+    expected_log_warn_line2 = "Skipped line(2): 20201000133324,10.20.30.1/16,-\n"
+    expected_log_warn_line3 = "Skipped line(3): 20201019133325,169090561,-\n"
+    expected_log_warn_line4 = "Skipped line(4): 20201019133326,10.20.30.1/33,-\n"
+    expected_log_warn_line5 = "Skipped line(5): 20201019133327,10.20.30.1/16,-1\n"
+    ResponseTimes(test_csv_path)
+    assert ("response_times", logging.INFO, expected_log_start) in caplog.record_tuples
+    assert ("response_times", logging.WARNING, expected_log_warn_line2) in caplog.record_tuples
+    assert ("response_times", logging.WARNING, expected_log_warn_line3) in caplog.record_tuples
+    assert ("response_times", logging.WARNING, expected_log_warn_line4) in caplog.record_tuples
+    assert ("response_times", logging.WARNING, expected_log_warn_line5) in caplog.record_tuples
+    assert ("response_times", logging.INFO, "Completed.") in caplog.record_tuples
+
+    # 読み込んだデータに重複があっても読み込める
+    test_csv_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "test_duplication.csv")
+    expected_log_start = "Started importing csv: {0:}".format(test_csv_path)
+    ResponseTimes(test_csv_path)
+    assert ("response_times", logging.INFO, expected_log_start) in caplog.record_tuples
+    assert ("response_times", logging.INFO, "Completed.") in caplog.record_tuples
 
 def test_find_all_failure():
     """
@@ -64,8 +89,28 @@ def test_find_all_failure():
         {"address": "10.20.30.1/16", "period": "2020-10-19 13:33:24 ~ 2020-10-19 13:33:25"},
         {"address": "10.20.30.1/16", "period": "2020-10-19 13:33:26 ~ 2020-10-19 13:33:28"},
         {"address": "10.20.30.2/16", "period": "2020-10-19 13:33:24 ~ 2020-10-19 13:33:25"},
-        {"address": "10.20.30.3/16", "period": "2020-10-19 13:33:29 ~ 2020-10-19 13:33:30"}
+        {"address": "10.20.30.2/16", "period": "2020-10-19 13:33:29 ~ 2020-10-19 13:33:30"}
         ]
+    actual = ResponseTimes(test_csv_path).find_all_failure()
+    assert actual == expect
+
+    # 最終的に復帰せずに終わっているものも障害扱いにする。
+    test_csv_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "test_1address_noreturn.csv")
+    expect = [{"address": "10.20.30.1/16",
+               "period": "2020-10-19 13:33:24 ~ 2020-10-19 13:33:26"},
+               {"address": "10.20.30.1/16",
+               "period": "2020-10-19 13:33:27 ~ 2020-10-19 13:33:28"}]
+    actual = ResponseTimes(test_csv_path).find_all_failure()
+    assert actual == expect
+
+    # 読み込んだデータに重複があった場合、あとに読み込んだほうのデータをつかう
+    test_csv_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "test_duplication.csv")
+    expect = [{"address": "10.20.30.1/16",
+               "period": "2020-10-19 13:33:23 ~ 2020-10-19 13:33:27"}]
     actual = ResponseTimes(test_csv_path).find_all_failure()
     assert actual == expect
 
@@ -192,6 +237,16 @@ def test_find_subnet_failure():
     expect = [{"subnet": "10.20.0.0/16",
                "period": "2020-10-19 13:33:24 ~ 2020-10-19 13:33:26"},
               {"subnet": "10.21.0.0/16",
+               "period": "2020-10-19 13:33:24 ~ 2020-10-19 13:33:26"}]
+    actual = response_times.find_all_subnet_failure(1)
+    assert expect == actual
+
+    # 同一サブネットで最終的に復帰していないものがあった場合でも障害検知
+    test_csv_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "test_1subnet_2address_eachfail_noreturn.csv")
+    response_times = ResponseTimes(test_csv_path)
+    expect = [{"subnet": "10.20.0.0/16",
                "period": "2020-10-19 13:33:24 ~ 2020-10-19 13:33:26"}]
     actual = response_times.find_all_subnet_failure(1)
     assert expect == actual

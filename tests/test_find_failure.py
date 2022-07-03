@@ -15,7 +15,7 @@ def response_times_instance():
     return ResponseTimes(test_csv_path)
 
 
-def test_find_failure():
+def test_find_all_failure():
     """
     find_failureメソッドの正常系のテスト
     """
@@ -24,13 +24,13 @@ def test_find_failure():
         os.path.dirname(os.path.abspath(__file__)),
         "test_1address_1fail.csv")
     expect = [{"address": "10.20.30.1/16",
-               "period": "20201019133324-20201019133326"}]
-    actual = ResponseTimes(test_csv_path).find_failure()
+               "period": "2020-10-19 13:33:24 ~ 2020-10-19 13:33:26"}]
+    actual = ResponseTimes(test_csv_path).find_all_failure()
     
     assert actual == expect
 
 
-def test_find_failure_threshold():
+def test_find_all_failure_threshold():
     """
     find_failureメソッドにthresholdを指定したときの正常系のテスト
     """
@@ -39,27 +39,27 @@ def test_find_failure_threshold():
         "test_1address_4fail.csv")
     response_times = ResponseTimes(test_csv_path)
     threshold1_expect = [
-        {"address": "10.20.30.1/16", "period": "20201019133324-20201019133325"},
-        {"address": "10.20.30.1/16", "period": "20201019133326-20201019133328"},
-        {"address": "10.20.30.1/16", "period": "20201019133329-20201019133332"},
-        {"address": "10.20.30.1/16", "period": "20201019133333-20201019133337"}
+        {"address": "10.20.30.1/16", "period": "2020-10-19 13:33:24 ~ 2020-10-19 13:33:25"},
+        {"address": "10.20.30.1/16", "period": "2020-10-19 13:33:26 ~ 2020-10-19 13:33:28"},
+        {"address": "10.20.30.1/16", "period": "2020-10-19 13:33:29 ~ 2020-10-19 13:33:32"},
+        {"address": "10.20.30.1/16", "period": "2020-10-19 13:33:33 ~ 2020-10-19 13:33:37"}
         ]
-    actual = response_times.find_failure(threshold = 1)
+    actual = response_times.find_all_failure(threshold = 1)
     assert threshold1_expect == actual
 
     threshold3_expect = [
-        {"address": "10.20.30.1/16", "period": "20201019133329-20201019133332"},
-        {"address": "10.20.30.1/16", "period": "20201019133333-20201019133337"}
+        {"address": "10.20.30.1/16", "period": "2020-10-19 13:33:29 ~ 2020-10-19 13:33:32"},
+        {"address": "10.20.30.1/16", "period": "2020-10-19 13:33:33 ~ 2020-10-19 13:33:37"}
         ]
-    actual = response_times.find_failure(threshold = 3)
+    actual = response_times.find_all_failure(threshold = 3)
     assert threshold3_expect == actual
 
     threshold5_expect = []
-    actual = response_times.find_failure(threshold = 5)
+    actual = response_times.find_all_failure(threshold = 5)
     assert threshold5_expect == actual
 
 
-def test_find_high_load():
+def test_find_all_high_load():
     """
     find_high_loadメソッドの正常系のテスト
     """
@@ -68,12 +68,12 @@ def test_find_high_load():
         "test_1address_4sawtooth.csv")
     response_times = ResponseTimes(test_csv_path)
     expect = [
-        {"address": "10.20.30.1/16", "period": "20201019133326-20201019133331"},
-        {"address": "10.20.30.1/16", "period": "20201019133334-20201019133339"},
-        {"address": "10.20.30.1/16", "period": "20201019133342-20201019133347"},
-        {"address": "10.20.30.1/16", "period": "20201019133350-20201019133355"},
+        {"address": "10.20.30.1/16", "period": "2020-10-19 13:33:26 ~ 2020-10-19 13:33:31"},
+        {"address": "10.20.30.1/16", "period": "2020-10-19 13:33:34 ~ 2020-10-19 13:33:39"},
+        {"address": "10.20.30.1/16", "period": "2020-10-19 13:33:42 ~ 2020-10-19 13:33:47"},
+        {"address": "10.20.30.1/16", "period": "2020-10-19 13:33:50 ~ 2020-10-19 13:33:55"},
         ]
-    actual = response_times.find_high_load(3, 3)
+    actual = response_times.find_all_high_load(3, 3)
     assert expect == actual
 
 
@@ -86,6 +86,6 @@ def test_find_subnet_failure():
         "test_1address_1fail.csv")
     response_times = ResponseTimes(test_csv_path)
     expect = [{"subnet": "10.20.0.0/16",
-               "period": "20201019133324-20201019133326"}]
+               "period": "2020-10-19 13:33:24 ~ 2020-10-19 13:33:26"}]
     actual = response_times.find_all_subnet_failure(1)
     assert expect == actual

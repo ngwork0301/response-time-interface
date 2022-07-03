@@ -39,7 +39,7 @@ Type "help", "copyright", "credits" or "license" for more information.
 * ping応答が1度でもタイムアウトしたサーバの故障期間のリストを取得する方法
 
 ``` Python
->>> resps.find_failure()
+>>> resps.find_all_failure()
 [{'address': '10.20.30.1/16', 'period': '20201019133324-20201019133326'}]
 ```
 
@@ -47,7 +47,7 @@ Type "help", "copyright", "credits" or "license" for more information.
 
 ``` Python
 >>> n = 2
->>> resps.find_failure(2)
+>>> resps.find_all_failure(2)
 [{'address': '10.20.30.1/16', 'period': '20201019133324-20201019133326'}]
 ```
 
@@ -56,7 +56,7 @@ Type "help", "copyright", "credits" or "license" for more information.
 
 ``` Python
 >>> m = 3; t = 3
->>> resps.find_high_load(m, t)
+>>> resps.find_all_high_load(m, t)
 [{'address': '10.20.30.1/16', 'period': '20201019133328-20201019133331'}]
 ```
 
@@ -65,12 +65,12 @@ Type "help", "copyright", "credits" or "license" for more information.
 
 ``` Python
 >>> n = 2
->>> resps.find_all_subnet_failure(2)
+>>> resps.find_all_subnet_failure(n)
 [{'subnet': '10.20.0.0/16', 'period': '20201019133324-20201019133326'}]
 ```
 
 ## 入力ファイルフォーマット(CSV)
-* カンマ区切りの形式で1行ずつ、サーバアドレスに対するping応答の応答結果が記録されます。
+* カンマ区切りの形式で1行ずつ、サーバアドレスに対するping応答の応答結果が記録されたファイルです。
 ```
 ＜確認日時＞,＜サーバアドレス＞,＜応答結果＞
 ```

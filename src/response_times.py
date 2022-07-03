@@ -11,13 +11,24 @@ def is_datetime(s_arg: str) -> bool:
     """
     与えられた引数の文字列が日時の形式になっているかを確認する。
     """
-    # TODO: ひとまず現状は自然数であればよいものとする。
-    return is_natural_number(s_arg)
+    if len(s_arg) != 14:
+        return False
+    try:
+        year = int(s_arg[0:4])
+        month = int(s_arg[4:6])
+        day = int(s_arg[6:8])
+        hour = int(s_arg[8:10])
+        minute = int(s_arg[10:12])
+        second = int(s_arg[12:14])
+        datetime.datetime(year, month, day, hour, minute, second)
+    except ValueError:
+        return False
+    return True
 
 
-def is_natural_number(s_arg: str) -> bool:
+def is_positive_integer(s_arg: str) -> bool:
     """
-    与えられた引数の文字列が自然数（正の整数）になっているかを確認する。
+    与えられた引数の文字列が0を含む正の整数になっているかを確認する。
     """
     try:
         i_arg = int(s_arg)
@@ -32,8 +43,25 @@ def is_address(s_arg: str) -> bool:
     """
     与えられた引数の文字列がサーバアドレスになっているかを確認する。
     """
-    # TODO: 現象はすべてpass
+    try:
+        # ipaddress.IPv4Interfaceでは許可されるが、
+        # 整数からIPアドレスへの変換は、ここでは許可しない。
+        if is_positive_integer(s_arg):
+            return False
+        ipaddress.IPv4Interface(s_arg)
+    except ValueError:
+        return False
     return True
+
+
+def is_response_time_result(s_arg: str) -> bool:
+    """
+    与えられた引数の文字列が応答時間結果になっているかを確認する。
+    """
+    if s_arg == '-':
+        return True
+    else:
+        return is_positive_integer(s_arg)
 
 
 class ResponseTimes(object):
@@ -63,11 +91,13 @@ class ResponseTimes(object):
             return True
 
         def is_valid_line(line: str) -> bool:
-            elements = line.split(',')
+            elements = line.strip().split(',')
             if len(elements) >= 3:
-                if not is_datetime(elements[0]):
+                if not is_datetime(elements[0].strip()):
                     return False
-                if not is_address(elements[1]):
+                if not is_address(elements[1].strip()):
+                    return False
+                if not is_response_time_result(elements[2].strip()):
                     return False
             else:
                 return False
@@ -91,13 +121,12 @@ class ResponseTimes(object):
                     if is_valid_line(line):
                         elements = line.split(',')
                         log_datetime = conv_to_datetime(elements[0].strip())
-                        response_time = elements[2].strip()
                         address = ipaddress.IPv4Interface(elements[1].strip())
+                        response_time = elements[2].strip()
                         if address not in self._records:
                             self._records[address] = {}
                         self._records[address][log_datetime] = response_time
-
-        self._parse_subnet()
+            self._parse_subnet()
 
     def _parse_subnet(self):
         """
@@ -170,7 +199,7 @@ class ResponseTimes(object):
         指定したサーバアドレスの過負荷期間を返却する。
         """
         def average(response_times: list[str]) -> Optional[float]:
-            only_num_list = list(filter(is_natural_number, response_times))
+            only_num_list = list(filter(is_positive_integer, response_times))
             if len(only_num_list) <= 0:
                 return None
             total = functools.reduce(

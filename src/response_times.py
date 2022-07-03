@@ -44,6 +44,9 @@ class ResponseTimes(object):
         '_records',
         '_subnets'
     ]
+    # サブネット内のサーバーアドレス内の障害期間の許容誤差
+    # (pingのデフォルトタイムアウト時間4秒 + デフォルトinterval 1秒?)とした
+    DEFAULT_SUBNET_FAILURE_TOLERANCE = 4 + 1
 
     def __init__(self, csv_file_path: str):
         self._records: dict[ipaddress.IPv4Interface, dict[datetime.datetime, str]] = {}
@@ -228,38 +231,62 @@ class ResponseTimes(object):
                      "period": period})
         return result
 
-    def _find_subnet_failure(self, subnet: ipaddress.IPv4Network, threshold: int = 1) -> list[dict[str, str]]:
+    def _find_subnet_failure(self, subnet: ipaddress.IPv4Network,
+                             threshold_count: int,
+                             tolerance: int = None
+                             ) -> list[dict[str, str]]:
         """
         指定したサブネットの故障期間を返却する。
         """
-        def includes(address_failure: list, period: str) -> bool:
-            for failure in address_failure:
-                end_time = failure['return_time'] if failure['return_time'] is not None else failure['last_failed_time']
-                failure_period = "{0:} ~ {1:}".format(failure['occurrance_time'], end_time)
-                if period == failure_period:
+        def is_in_tolerance(left: datetime.datetime, right: datetime.datetime, tolerance: int) -> bool:
+            dt = datetime.timedelta(seconds=tolerance)
+            if (right - dt) <= left and left <= (right + dt):
+                return True
+            return False
+
+        def nearly_equal(left_failure: dict, right_failure: dict, tolerance: int) -> bool:
+            if not is_in_tolerance(left_failure['occurrance_time'], right_failure['occurrance_time'], tolerance):
+                return False
+            else:
+                l_end_time = left_failure['return_time'] if left_failure['return_time'] is not None else left_failure['last_load_time']
+                r_end_time = right_failure['return_time'] if right_failure['return_time'] is not None else right_failure['last_load_time']
+                if not is_in_tolerance(l_end_time, r_end_time, tolerance):
+                    return False
+            return True
+
+        def includes(failures: list, target_failure: dict, tolerance: int) -> bool:
+            for failure in failures:
+                if nearly_equal(failure, target_failure, tolerance):
                     return True
             return False
 
+        if tolerance is None:
+            tolerance = ResponseTimes.DEFAULT_SUBNET_FAILURE_TOLERANCE
         # サブネットに属する2つの以上のホストがリストにない場合は、サブネットの故障とはしない
         # if len(self._subnets[subnet]) < 2:
         #     return []
         # 最初のホストの故障期間データをもとに他のホストの故障を調べる
-        first_address_failures = self._find_address_failure(self._subnets[subnet][0], threshold)
+        first_address_failures = self._find_address_failure(self._subnets[subnet][0], threshold_count)
         result = [
-            {"subnet": subnet.with_prefixlen,
-             "period": "{0:} ~ {1:}".format(failure['occurrance_time'],
-            failure['return_time'] if failure['return_time'] is not None else failure['last_failed_time'])}
+            {"subnet": subnet,
+             "occurrance_time": failure['occurrance_time'],
+             "last_failed_time": failure['last_failed_time'],
+             "return_time": failure['return_time']}
             for failure in first_address_failures]
         for address in self._subnets[subnet]:
-            address_failure = self._find_address_failure(address, threshold)
-            result = list(filter(lambda r: includes(address_failure, r["period"]), result))
+            address_failure = self._find_address_failure(address, threshold_count)
+            result = list(filter(lambda r: includes(address_failure, r, tolerance), result))
         return result
 
-    def find_all_subnet_failure(self, threshold: int = 1) -> list[dict[str, str]]:
+    def find_all_subnet_failure(self, threshold_count: int = 1) -> list[dict[str, str]]:
         """
         故障状態のサブネットと、その故障期間を返却する。
         """
         result = []
         for subnet in self._subnets.keys():
-            result += self._find_subnet_failure(subnet, threshold)
+            failures = self._find_subnet_failure(subnet, threshold_count)
+            for failure in failures:
+                end_time = failure['return_time'] if failure['return_time'] is not None else failure['last_failed_time']
+                period = "{0:} ~ {1:}".format(failure['occurrance_time'], end_time)
+                result.append({"subnet": failure['subnet'].with_prefixlen, "period": period})
         return result

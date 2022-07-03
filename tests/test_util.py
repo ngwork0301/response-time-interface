@@ -1,4 +1,3 @@
-from tomlkit import integer
 from response_times import is_datetime, is_positive_integer, is_address, is_response_time_result
 
 
@@ -98,4 +97,3 @@ def test_is_response_time_result():
     assert is_response_time_result("1") is True
     assert is_response_time_result("0") is True
     assert is_response_time_result("-1") is False
-

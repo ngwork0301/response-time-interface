@@ -94,6 +94,4 @@ Type "help", "copyright", "credits" or "license" for more information.
 ```
 
 ## 開発環境
-* 開発環境作成のメモは [[Wiki|wiki]] を参照
-
-
+* 開発環境作成のメモは [Wiki](https://github.com/ngwork0301/response-time-interface/wiki) を参照

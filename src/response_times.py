@@ -112,7 +112,7 @@ class ResponseTimes(object):
                 self._subnets[subnet] = []
             self._subnets[subnet].append(address)
 
-    def _find_address_failure(self, address: ipaddress.IPv4Interface, threshold: int) -> list[dict]:
+    def _find_failure(self, address: ipaddress.IPv4Interface, threshold: int) -> list[dict]:
         """
         指定したサーバアドレスの故障期間を返却する。
         """
@@ -158,14 +158,14 @@ class ResponseTimes(object):
         if threshold <= 0:
             threshold = 1
         for address in self._records.keys():
-            failures = self._find_address_failure(address, threshold)
+            failures = self._find_failure(address, threshold)
             for failure in failures:
                 end_time = failure['return_time'] if failure['return_time'] is not None else failure['last_failed_time']
                 period = "{0:} ~ {1:}".format(failure['occurrance_time'], end_time)
                 result.append({"address": failure['address'].with_prefixlen, "period": period})
         return result
 
-    def _find_address_high_load(self, address: ipaddress.IPv4Interface, threshold_count: int, threshold_average: float)  -> list[dict]:
+    def _find_high_load(self, address: ipaddress.IPv4Interface, threshold_count: int, threshold_average: float)  -> list[dict]:
         """
         指定したサーバアドレスの過負荷期間を返却する。
         """
@@ -222,7 +222,7 @@ class ResponseTimes(object):
         """
         result = []
         for address in self._records.keys():
-            high_loads = self._find_address_high_load(address, threshold_count, threshold_average)
+            high_loads = self._find_high_load(address, threshold_count, threshold_average)
             for high_load in high_loads:
                 end_time = high_load['return_time'] if high_load['return_time'] is not None else high_load['last_load_time']
                 period = "{0:} ~ {1:}".format(high_load['occurrance_time'], end_time)
@@ -266,7 +266,7 @@ class ResponseTimes(object):
         # if len(self._subnets[subnet]) < 2:
         #     return []
         # 最初のホストの故障期間データをもとに他のホストの故障を調べる
-        first_address_failures = self._find_address_failure(self._subnets[subnet][0], threshold_count)
+        first_address_failures = self._find_failure(self._subnets[subnet][0], threshold_count)
         result = [
             {"subnet": subnet,
              "occurrance_time": failure['occurrance_time'],
@@ -274,7 +274,7 @@ class ResponseTimes(object):
              "return_time": failure['return_time']}
             for failure in first_address_failures]
         for address in self._subnets[subnet]:
-            address_failure = self._find_address_failure(address, threshold_count)
+            address_failure = self._find_failure(address, threshold_count)
             result = list(filter(lambda r: includes(address_failure, r, tolerance), result))
         return result
 

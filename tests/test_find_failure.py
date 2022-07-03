@@ -1,4 +1,5 @@
 import pytest
+import logging
 import os
 from response_times import ResponseTimes
 
@@ -13,6 +14,19 @@ def response_times_instance():
         os.path.dirname(os.path.abspath(__file__)),
         "test_1address_1fail.csv")
     return ResponseTimes(test_csv_path)
+
+def test_import_csv(caplog):
+    """
+    _import_csv()メソッドのテスト
+    """
+    caplog.set_level(logging.INFO)
+    test_csv_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "test_1address_1fail.csv")
+    expected_log_start = "Started importing csv: {0:}".format(test_csv_path)
+    ResponseTimes(test_csv_path)
+    assert ("response_times", logging.INFO, expected_log_start) in caplog.record_tuples
+    assert ("response_times", logging.INFO, "Completed.") in caplog.record_tuples
 
 
 def test_find_all_failure():

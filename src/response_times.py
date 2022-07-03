@@ -6,7 +6,23 @@ import ipaddress
 from typing import Optional
 import os
 
+###################################
+# Loggerの初期化処理
+###################################
+import json
+from logging import getLogger, config
+log_conf_path =  os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "log_config.json")
+with open(log_conf_path, 'r', encoding='utf-8') as f:
+    log_conf = json.load(f)
+config.dictConfig(log_conf)
+logger = getLogger(__name__)
 
+
+###################################
+# ユーティリティ関数群
+###################################
 def is_datetime(s_arg: str) -> bool:
     """
     与えられた引数の文字列が日時の形式になっているかを確認する。
@@ -64,6 +80,7 @@ def is_response_time_result(s_arg: str) -> bool:
         return is_positive_integer(s_arg)
 
 
+###################################
 class ResponseTimes(object):
     """
     時系列の応答時間データクラス
@@ -79,14 +96,16 @@ class ResponseTimes(object):
     def __init__(self, csv_file_path: str):
         self._records: dict[ipaddress.IPv4Interface, dict[datetime.datetime, str]] = {}
         self._subnets: dict[ipaddress.IPv4Network, list[ipaddress.IPv4Interface]] = {}
-        self.read_csv(csv_file_path)
+        self._import_csv(csv_file_path)
 
-    def read_csv(self, file_path: str) -> None:
+    def _import_csv(self, file_path: str) -> None:
         """
         指定されたパスのCSVファイルを読み込む
         """
         def is_valid_csv(file_path: str) -> bool:
             if not os.path.isfile(file_path):
+                return False
+            if not os.access(file_path, os.R_OK):
                 return False
             return True
 
@@ -113,7 +132,9 @@ class ResponseTimes(object):
             return datetime.datetime(year, month, day, hour, minute, second)
 
         if is_valid_csv(file_path):
+            logger.info("Started importing csv: {0:}".format(file_path))
             with open(file_path, "r", encoding="utf-8") as fd:
+                line_num = 0
                 while True:
                     line = fd.readline()
                     if not line:
@@ -126,7 +147,13 @@ class ResponseTimes(object):
                         if address not in self._records:
                             self._records[address] = {}
                         self._records[address][log_datetime] = response_time
+                    else:
+                        logger.warning("Skipped line({0:}): {1:}".format(line_num, line))
+                    line_num += 1
             self._parse_subnet()
+            logger.info("Completed.")
+        else:
+            logger.error("Failed to import csv: {0:}".format(file_path))
 
     def _parse_subnet(self):
         """
